@@ -1,0 +1,447 @@
+\ Inputs
+\testing it's changed
+
+^MENT = 6 \ magazine
+
+^LENT = 7 \ left nose poke
+
+^RENT = 8 \ right nose poke
+
+
+
+
+\ Outputs
+
+^MAGLIGHT = 6
+
+^HLIGHT = 7
+
+^PELLET = 8
+
+^TONE = 9
+
+^PUMP = 14
+
+^LCUE = 11
+
+^RCUE = 12
+
+^FRESP = 15 \ currently the left NP (15)
+
+^DRESP =16 \ currently the right NP (16)
+
+
+
+
+\ Variables Defined ó for data acquisition and programming
+
+\ B = response in magazine port made? (0 = no, 1 = yes)
+
+\ C = response in NP made?
+
+\ D(1) = time stamp inappropriate food response
+
+\ D(2) = inappropriate drug response
+
+\ D(3) = time stamping inappropriate response
+
+\ D(4) =  omissions counter
+
+\ D(5) = food response counter
+
+\ D(6) = drug response counter
+
+\ E = dummy variable
+
+\ F = dummy variable
+
+\ G = dummy variable
+
+\ H = variable for time of infusion.
+
+\ I = dummy variable for time
+
+\ J = counting variable for time stamping maglight on
+
+\ L = incorrect counter (should be impossible)
+
+\ M = # trials for an individual rat to close program?
+
+\ N = total number of choices / trials
+
+\ O = array of drug vs food choices (3 = omission, 1 = food, 2 = drug)
+
+\ P = PHASE OF TRIAL (1=ACTIVE, 2=CHOICE, 3=REWARD PERIOD, 4=ITI)
+
+\ Q = session timer (number of minutes elapsed)
+
+\ R = timestamp for choice
+
+\ S = timestamp for reward delivery
+
+\ T = timestamp for reward retrieval (food only)
+
+\ U = timestamp for trial start (mag light on)
+
+\ V = timestamp trial initiation (mag entry)
+
+\ W = timestamp for start ITI
+
+\ X = timestamp for FRESP during off-time
+
+\ Y = omission trial variable
+
+\ A = timestamp for DRESP during off time
+
+
+
+
+\ Time Variables
+
+LIST K = 9,9,10,10,10,11,11
+
+^STIM = 12000 \ *0.01 sec: stimulus duration (currently at 120s)
+
+
+
+
+\ Z-PULSES USED IN THIS PROGRAM
+
+\Z1 = timestamp for choice
+
+\Z2 = timestamp for reward delivery
+
+\Z3 = timestamp for food reward retrieval
+
+\Z4 = timestamp for trial start (mag light on)
+
+\Z5 = timestamp for trial init (mag entry)
+
+\Z6 = timestamp for ITI statt
+
+\Z7 = timestamp for FRESP entry during ITI
+
+\Z8 = timestamp for DRESP entry during ITI
+
+\Z9 = EXIT MAGAZINE
+
+\Z10 = EXIT LEFT NOSEPORT
+
+\Z11 = EXIT RIGHT LEVER
+
+
+
+\ ARRAYS
+
+DIM O = 401
+
+DIM R = 401
+
+DIM S = 401
+
+DIM T = 401
+
+DIM U = 401
+
+DIM V = 401
+
+DIM W = 4001
+
+DIM X = 4001
+
+DIM D = 7
+
+DIM A = 4001
+
+\ set to 4000 for the time being
+
+
+
+
+\ VARIABLES TO SET AT THE BEGINNING OF THE SESSION
+
+^M = 100 \ number of trials needed to kill session
+
+^H = 0 \ infusion time
+
+
+
+\Main Program
+
+
+
+
+S.S.1, \SKELETON
+
+
+S1, \ await start command from user, set values as below and move to next state.
+
+#START: SET B=0, N=0, D(1) = 0, D(2) = 0, D(3)=0, D(4)=0, D(5)=0, L=0, J=1; ON^MAGLIGHT; SET P=1; ---> S2
+
+
+S2,
+
+0.01": IF B = 1 [@TRUE, @FALSE]
+    @TRUE: OFF ^MAGLIGHT; SET P=2; SET B=0, C = 0; ADD N; SHOW 1, TRIALS, N;  ---> S3
+    @FALSE: ---> S2 \ we loop until magazine entry occurs (B=1)
+
+
+S3, \ turn on food NP, set phase of trial to active
+
+0.01": ON ^FRESP; Z5; SET Y = 0; ---> S4
+
+
+S4, \ wait for response to food
+
+    0.01": ADD Y; IF Y >= ^STIM [@TRUE, @FALSE]
+        @TRUE: SET O(N)=3; ADD D(4); SHOW 5, OMISSIONS, D(4); OFF ^FRESP, ^DRESP; SET P=4 ---> S11 \ omission
+        @FALSE: IF C > 0 [@TRUE, @FALSE] \ if the rat records a response
+            @TRUE: Z1; IF C=1 [@TRUE, @FALSE]
+                @TRUE: SET O(N)= 1; OFF ^FRESP, ^DRESP; ADD D(5); SHOW 4, FOOD, D(5); ---> S5
+                @FALSE: SET O(N) = 4; OFF ^FRESP; ADD L; SHOW 6, INCORRECT, L---> S9 \ this should be impossible
+            @FALSE: ---> S4 \ keep looping
+
+
+
+S5, \ Pellet 1  Dispensed
+
+0.01": ON ^PELLET, ^LCUE; Z2; SET P = 3 ---> S6
+
+
+
+S6, \ Stop Pellet 1
+
+1": OFF ^PELLET; ---> S13
+
+
+
+S13, \ Pellet 2 Disp
+1": ON ^PELLET; ---> S14
+
+
+
+S14, \ Stop Pellet 2
+1": OFF ^PELLET; ---> S12
+
+
+
+
+S9, \ start ITI
+
+0.01": SET P = 4; Z6; RANDI E = K; SET F = E", C = 0 ---> S10
+
+
+
+S10, \ transition back to S2
+
+F#T: SET P = 1; ON ^MAGLIGHT; Z4; ADD J; ---> S2
+
+
+
+S11, \ omission trial (punish with 5 seconds)
+
+5": ---> S9
+
+
+
+S12,
+
+10": OFF ^LCUE ---> S9
+
+
+
+
+
+
+S.S.2,\ SESSION TIMER AND END SESSION
+
+S1,
+
+#START: SET Q = 0; --->S2
+
+
+
+S2,
+
+0.01": ADD Q; SHOW 2, SES TIMER, Q/6000; IF Q>540000 [@TRUE, @FALSE]
+
+@TRUE: ---> STOPSAVE
+
+@FALSE: IF N > ^M [@TRUE, @FALSE]
+
+@TRUE: --->STOPSAVE
+
+@FALSE: ---> S2
+
+\ based on time elapsed or trials completed
+
+
+
+
+
+
+
+S.S.4, \TIMESTAMPS
+
+S1,
+
+#Z1: SET R(N) = Q ---> S1 \ timestamp for choice
+
+#Z2: SET S(N) = Q ---> S1 \ timestamp for reward delivery
+
+#Z3: SET T(N) = Q ---> S1 \ timestamp for reward retrieval (food only) (P = 3 only)
+
+#Z4: SET U(J) = Q ---> S1 \ timestamp for trial start (mag light on) - NEED A DIFFERENT VARIABLE (NOT N)
+
+#Z5: SET V(N) = Q ---> S1 \ timestamp for trial start init. (mag entry)
+
+#Z6: SET W(N) = Q ---> S1 \ timestamp for ITI start
+
+#Z7: SET X(D(1)) = Q ---> S1 \ timestamp for FRESP during off time
+
+#Z8: SET A(D(2)) = Q ---> S1 \ timestamp for DRESP during off time
+
+
+
+
+
+
+
+S.S.11, \for logging FRESP entry
+
+S1,
+
+#START: ---> S2
+
+
+
+S2,
+
+#Z12: IF P=2 [@TRUE, @FALSE]
+    @TRUE: SET C=1; OFF ^FRESP, ^DRESP; ---> S2
+    @FALSE: ---> S3
+
+S3,
+
+0.25": ADD D(1); Z7; ---> S2
+
+
+
+\ variable for time stamping FRESP entry for appropriate and inappropriate times.
+
+
+
+
+
+
+
+
+S.S.12, \logging DRESP entry
+
+S1,
+
+#START: ---> S2
+
+
+
+S2,
+
+#Z11: ---> S3
+
+S3,
+
+0.25": ADD D(2); Z8; ---> S2
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+S.S.13, \logging mag entry (to initiate trial, and food retrieval)
+
+S1,
+
+#START: ---> S2
+
+
+
+S2,
+
+#Z9: IF P=1 [@TRUE, @FALSE]
+
+    @TRUE: SET B=1; ---> S2
+
+    @FALSE: IF P=3 [@TRUE, @FALSE]
+
+        @TRUE: Z3; ---> S3
+
+        @FALSE: ADD D(3) ---> S4
+
+S3,
+3": ---> S2
+
+S4,
+
+0.25": ---> S2
+
+
+
+
+
+
+S.S.14, \ magazine hold
+
+S1,
+
+#START ---> S2
+
+S2,
+
+#R^MENT: ---> sx
+#R^RENT: ---> sx
+#R^LENT: ---> sx
+0": Z10 ---> S2
+
+
+
+
+
+
+S.S.15, \ counting hold time
+
+S1,
+#START ---> S2
+
+S2,
+#R^MENT: SET D(7) = 0;---> S3
+#R^RENT: SET D(7) = 0; ---> S4
+#R^LENT: SET D(7) = 0;---> S5
+
+S3,
+0.01": ADD D(7) ---> S3
+#Z10: IF D(7) >= 25 [@TRUE, @FALSE]
+   @TRUE: Z9 ---> S2
+   @FALSE: ---> S2
+
+
+S4,
+0.01": ADD D(7) ---> S4
+#Z10: IF D(7) >= 25 [@TRUE, @FALSE]
+    @TRUE: Z11 ---> S2
+    @FALSE: ---> S2
+
+
+S5,
+0.01": ADD D(7) ---> S5
+#Z10: IF D(7) >= 25 [@TRUE, @FALSE]
+    @TRUE: Z12 ---> S2
+    @FALSE: ---> S2
+
