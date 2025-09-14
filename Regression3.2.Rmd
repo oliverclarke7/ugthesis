@@ -1,0 +1,68 @@
+---
+title: "Olly Clarke"
+output: html_document
+date: "2025-04-02"
+---
+
+```{r}
+
+# Load required packages
+library(tidyverse)  # for data manipulation (dplyr, tidyr)
+library(lme4)       # for fitting mixed-effects models
+
+# Read the CSV file
+data <- read.csv("/Users/olly/Desktop/ASI/ASI/MAT Files/master_regressionRR_3.2.csv")
+
+# --- Step 1: Reshape the Data ---
+
+# 1a. Reshape the RPS measurements (columns like "RPS_Age_30", "RPS_Age_50", etc.)
+rps_long <- data %>%
+  pivot_longer(
+    cols = starts_with("RPS_Age_"),
+    names_to = "Age",
+    values_to = "RPS"
+  ) %>%
+  mutate(Age = as.numeric(sub("RPS_Age_", "", Age)))  # extract the numeric age
+
+# 1b. Reshape the predictors (columns like "LF1_P30", "LF2_1_P30", "ETF1_P30", etc.)
+# Identify all predictor columns (exclude rat, sex, group, and the RPS columns)
+predictor_cols <- setdiff(names(data), grep("^RPS_Age_", names(data), value = TRUE))
+
+predictors_long <- data %>%
+  select(rat, sex, group, all_of(predictor_cols)) %>%
+  pivot_longer(
+    cols = -c(rat, sex, group),
+    names_to = "variable",
+    values_to = "value"
+  ) %>%
+  # Extract the age from the column names (everything after "_P")
+  mutate(Age = as.numeric(sub(".*_P", "", variable)),
+         # Extract the predictor name (everything before "_P")
+         var_name = sub("_P.*", "", variable)) %>%
+  select(-variable)
+
+# Pivot wider so that each predictor becomes its own column
+predictors_wide <- predictors_long %>%
+  pivot_wider(names_from = var_name, values_from = value)
+
+# 1c. Merge the RPS data with the predictors by rat, sex, group, and Age
+final_data <- left_join(rps_long, predictors_wide, by = c("rat", "sex", "group", "Age"))
+
+# --- Step 2: Center Age so that 30 is the baseline ---
+final_data <- final_data %>%
+  mutate(Age_centered = Age - 30)
+
+# --- Step 3: Fit the Nested Regression Model ---
+# Here we fit a mixed-effects model where:
+# - The outcome is RPS,
+# - Age_centered and the selected time-varying predictors are entered as fixed effects,
+# - (1 + Age_centered | rat) specifies that each rat has its own intercept and slope for Age_centered.
+model <- lmer(RPS ~ Age_centered + LF1 + LF2_2 +
+                    ETF1 + ETF2_2 +
+                    EPF1 + EPF2_2 +
+                    (1 + Age_centered | rat),
+              data = final_data)
+
+# Display the summary of the model
+summary(model)
+```
